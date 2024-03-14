@@ -1,11 +1,12 @@
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use aws_config::BehaviorVersion;
+use aws_sdk_sts::error::ProvideErrorMetadata;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types_convert::date_time::DateTimeExt;
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{MatchedPath, Path, State},
+    http::{Request, StatusCode},
     response::IntoResponse,
     routing::get,
     Json, Router,
@@ -14,7 +15,11 @@ use chrono::{DateTime, Utc};
 
 use base64::prelude::*;
 use serde::Serialize;
+use serde_json::json;
 use tokio::net::TcpListener;
+use tower_http::trace::TraceLayer;
+use tracing::info_span;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct AppState {
     aws_region: String,
@@ -29,6 +34,15 @@ struct AppState {
 /// 3. 通过 session 查询活体检测结果
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "aws_rekognition_face_liveness_detection=trace,tower_http=debug,axum::rejection=trace".into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let app_state = AppState {
         aws_region: sdk_config.region().unwrap().to_string(),
@@ -37,12 +51,34 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/credential", get(get_credentials))
+        .route("/health", get(check_health))
+        .route("/credentials", get(get_credentials))
         .route("/liveness/session", get(create_liveness_session))
         .route("/liveness/session/:id", get(get_liveness_sesssion_result))
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http",
+                    method = ?request.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
         .with_state(App::new(app_state));
+
     let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap()
+}
+
+async fn check_health() -> &'static str {
+    "ok"
 }
 
 /// 获取sts临时授权
@@ -131,23 +167,32 @@ enum AppError {
 
 impl<E> From<SdkError<E, aws_smithy_runtime_api::http::Response>> for AppError
 where
-    E: Debug,
+    E: ProvideErrorMetadata,
 {
     fn from(sdk_err: SdkError<E, aws_smithy_runtime_api::http::Response>) -> Self {
         let code = if let Some(resp) = sdk_err.raw_response() {
-            println!("aws sdk error body = {:?}", resp.body());
             StatusCode::from_u16(resp.status().as_u16()).unwrap()
         } else {
             StatusCode::INTERNAL_SERVER_ERROR
         };
-        AppError::SdkError(code, sdk_err.to_string())
+        let message = sdk_err
+            .message()
+            .map(|m| m.to_string())
+            .unwrap_or(sdk_err.to_string());
+        tracing::error!(
+            "AWS sdk error: code = {}, meta = {:?}",
+            code,
+            sdk_err.meta()
+        );
+        AppError::SdkError(code, message)
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        match self {
-            AppError::SdkError(code, msg) => (code, msg).into_response(),
-        }
+        let (code, message) = match self {
+            AppError::SdkError(code, msg) => (code, msg),
+        };
+        (code, Json(json!({"error": message}))).into_response()
     }
 }

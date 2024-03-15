@@ -1,5 +1,7 @@
 # AWS rekognition face liveness detection
 
+[使用 AWS Rekognition 进行活体检测](https://aitsuki.com/blog/liveness-detection-with-aws-rekognition/)
+
 ## 运行项目
 
 ### 后端（Rust）

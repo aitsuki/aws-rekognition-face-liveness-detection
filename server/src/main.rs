@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aws_config::BehaviorVersion;
+use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
 use aws_sdk_sts::error::ProvideErrorMetadata;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types_convert::date_time::DateTimeExt;
@@ -43,7 +43,11 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+    let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+        .region(region_provider)
+        .load().await;
+    
     let app_state = AppState {
         aws_region: sdk_config.region().unwrap().to_string(),
         sts_client: aws_sdk_sts::Client::new(&sdk_config),

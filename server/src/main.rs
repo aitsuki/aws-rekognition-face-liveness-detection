@@ -88,7 +88,7 @@ async fn get_credentials(State(app): State<App>) -> Result<Json<Credentials>, Ap
     Ok(Json(Credentials {
         access_key_id: c.access_key_id,
         secret_access_key: c.secret_access_key,
-        expirtion: c.expiration.to_chrono_utc().unwrap(),
+        expiration: c.expiration.to_chrono_utc().unwrap(),
         session_token: c.session_token,
     }))
 }
@@ -142,7 +142,7 @@ async fn get_liveness_sesssion_result(
 struct Credentials {
     access_key_id: String,
     secret_access_key: String,
-    expirtion: DateTime<Utc>,
+    expiration: DateTime<Utc>,
     session_token: String,
 }
 

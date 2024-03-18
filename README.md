@@ -29,7 +29,7 @@ windows(powershell):
 $Env:AWS_ACCESS_KEY_ID="your access key id"
 $Env:AWS_SECRET_ACCESS_KEY="your secret access key"
 $Env:AWS_REGION="us-east-1"
-cargo run
+cargo run -- --port 8080
 ```
 
 linux/macos:
@@ -37,7 +37,7 @@ linux/macos:
 export AWS_ACCESS_KEY_ID="your access key id"
 export AWS_SECRET_ACCESS_KEY="your secret access key"
 export AWS_REGION="us-east-1"
-cargo run
+cargo run -- --port 8080
 ```
 
 ### 安卓端（Compose）

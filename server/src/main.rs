@@ -14,12 +14,19 @@ use axum::{
 use chrono::{DateTime, Utc};
 
 use base64::prelude::*;
+use clap::Parser;
 use serde::Serialize;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[derive(clap::Parser)]
+struct Config {
+    #[arg(short, long)]
+    port: Option<u16>,
+}
 
 struct AppState {
     aws_region: String,
@@ -34,10 +41,16 @@ struct AppState {
 /// 3. 通过 session 查询活体检测结果
 #[tokio::main]
 async fn main() {
+    let config = Config::parse();
+    let port = match config.port {
+        Some(p) => p,
+        None => 8080,
+    };
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                "aws_rekognition_face_liveness_detection=trace,tower_http=debug,axum::rejection=trace".into()
+                "aws_face_liveness=trace,tower_http=debug,axum::rejection=trace".into()
             }),
         )
         .with(tracing_subscriber::fmt::layer())
@@ -46,8 +59,9 @@ async fn main() {
     let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
     let sdk_config = aws_config::defaults(BehaviorVersion::latest())
         .region(region_provider)
-        .load().await;
-    
+        .load()
+        .await;
+
     let app_state = AppState {
         aws_region: sdk_config.region().unwrap().to_string(),
         sts_client: aws_sdk_sts::Client::new(&sdk_config),
@@ -76,7 +90,9 @@ async fn main() {
         )
         .with_state(App::new(app_state));
 
-    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap()
 }

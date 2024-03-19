@@ -50,7 +50,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                "aws_face_liveness=trace,tower_http=debug,axum::rejection=trace".into()
+                "aws_face_liveness=trace,tower_http=debug,axum::rejection=trace,aws_sigv4=trace".into()
             }),
         )
         .with(tracing_subscriber::fmt::layer())

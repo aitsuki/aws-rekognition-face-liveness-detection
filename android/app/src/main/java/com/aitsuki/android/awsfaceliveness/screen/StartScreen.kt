@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +36,7 @@ fun StartScreen() {
         val navController = LocalNavController.current
         val scope = rememberCoroutineScope()
         var isLoading by remember { mutableStateOf(false) }
-        var hostUrl by remember { mutableStateOf("http://192.168.1.1:8080") }
+        var hostUrl by rememberSaveable { mutableStateOf("http://192.168.1.1:8080") }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (isLoading) {

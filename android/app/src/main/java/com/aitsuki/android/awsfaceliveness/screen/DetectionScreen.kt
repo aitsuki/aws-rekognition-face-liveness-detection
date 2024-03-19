@@ -12,7 +12,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,11 +40,37 @@ import kotlinx.coroutines.launch
 @Composable
 fun DetectionScreen() {
     var isLoading by remember { mutableStateOf(false) }
-    val permissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
+    var requestSessionFlag by remember { mutableIntStateOf(0) }
+    val permissionState = rememberPermissionState(permission = Manifest.permission.CAMERA) {
+        if (it) {
+            requestSessionFlag++
+        }
+    }
     var session: LivenessSession? by remember { mutableStateOf(null) }
     var livenessResult: LivenessResult? by remember { mutableStateOf(null) }
     val scope = rememberCoroutineScope()
     val appState = LocalAppState.current
+
+    LaunchedEffect(requestSessionFlag) {
+        if (requestSessionFlag == 0) return@LaunchedEffect
+        if (permissionState.status != PermissionStatus.Granted) return@LaunchedEffect
+        if (isLoading) return@LaunchedEffect
+        scope.launch {
+            if (permissionState.status == PermissionStatus.Granted) {
+                isLoading = true
+                val result = appState.createLivenessSession()
+                isLoading = false
+                result.onSuccess {
+                    session = it
+                }
+                result.onFailure {
+                    appState.showSnackbar(it)
+                }
+            } else {
+                permissionState.launchPermissionRequest()
+            }
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -73,20 +101,10 @@ fun DetectionScreen() {
         Button(
             modifier = Modifier.fillMaxWidth(), onClick = {
                 if (isLoading) return@Button
-                scope.launch {
-                    if (permissionState.status == PermissionStatus.Granted) {
-                        isLoading = true
-                        val result = appState.createLivenessSession()
-                        isLoading = false
-                        result.onSuccess {
-                            session = it
-                        }
-                        result.onFailure {
-                            appState.showSnackbar(it)
-                        }
-                    } else {
-                        permissionState.launchPermissionRequest()
-                    }
+                if (permissionState.status == PermissionStatus.Granted) {
+                    requestSessionFlag++
+                } else {
+                    permissionState.launchPermissionRequest()
                 }
             }) {
             Text(text = "Start Liveness Detection")

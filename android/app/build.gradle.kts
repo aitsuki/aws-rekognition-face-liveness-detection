@@ -7,6 +7,15 @@ android {
     namespace = "com.aitsuki.android.awsfaceliveness"
     compileSdk = 34
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootProject.projectDir}/aws-face-liveness.jks")
+            storePassword = "awsfaceliveness"
+            keyAlias = "awsfaceliveness"
+            keyPassword = "awsfaceliveness"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.aitsuki.android.awsfaceliveness"
         minSdk = 24
@@ -22,6 +31,7 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
